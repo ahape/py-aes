@@ -20,26 +20,34 @@ for _ in range(10):
   Rcon += [p_rcon << (6*4)] # Programmatically build Rcon
   p_rcon = (p_rcon<<1) ^ (0x11b & -(p_rcon>>7))
 
-Sbox, p, q = array2d(16, [0x63]), 1, 1
+sbox, p, q = array2d(16, [0x63]), 1, 1
 while True:
   p = (p ^ (p << 1) & 0xff) ^ (0x1b if p & 0x80 else 0)
   for s in [1, 2, 4]:
     q ^= (q << s) & 0xff
   q ^= 0x09 if q & 0x80 else 0
-  Sbox[p//16][p%16] = q ^ rotate_L8(q,1) ^ rotate_L8(q,2) ^ rotate_L8(q,3) ^ rotate_L8(q,4) ^ 0x63
+  sbox[p//16][p%16] = q ^ rotate_L8(q,1) ^ rotate_L8(q,2) ^ rotate_L8(q,3) ^ rotate_L8(q,4) ^ 0x63
   if p == 1: break
 
-def sub_bytes(state):
+inv_sbox = array2d(16)
+for n in range(16*16):
+  v = sbox[n >> 4][n & 0xf]
+  v = ((((v >> 4) - 1) << 4) & 0xf0) | (((v & 0xf) - 1) & 0xf)
+  k = sbox[v >> 4][v & 0xf]
+  inv_sbox[k >> 4][k & 0xf] = v
+
+def sub_bytes(state, inv=False):
+  box = sbox if not inv else inv_sbox
   tmp = array2d(4)
   for r in range(Nk):
     for c in range(Nb):
-      tmp[r][c] = Sbox[state[r][c] >> 4 & 0xf][state[r][c] & 0xf]
+      tmp[r][c] = box[state[r][c] >> 4][state[r][c] & 0xf]
   state[:] = tmp[:]
 
 def sub_word(w):
   wbs, o_wbs = word_bytes(w), []
   for byte in wbs:
-    o_wbs += [Sbox[byte >> 4 & 0xf][byte & 0xf]]
+    o_wbs += [sbox[byte >> 4][byte & 0xf]]
   return word(o_wbs)
 
 def add_round_key(s, ws):
@@ -67,15 +75,21 @@ def mix_column(col): return [
   col[0] ^ col[1] ^ gmul(0x02, col[2]) ^ gmul(0x03, col[3]),
   gmul(0x03, col[0]) ^ col[1] ^ col[2] ^ gmul(0x02, col[3])]
 
-def mix_columns(s):
-  for c in range(Nb):
-    s[c] = mix_column(s[c])
+def inv_mix_column(col): return [
+  gmul(0x0e, col[0]) ^ gmul(0x0b, col[1]) ^ gmul(0x0d, col[2]) ^ gmul(0x09, col[3]),
+  gmul(0x09, col[0]) ^ gmul(0x0e, col[1]) ^ gmul(0x0b, col[2]) ^ gmul(0x0d, col[3]),
+  gmul(0x0d, col[0]) ^ gmul(0x09, col[1]) ^ gmul(0x0e, col[2]) ^ gmul(0x0b, col[3]),
+  gmul(0x0b, col[0]) ^ gmul(0x0d, col[1]) ^ gmul(0x09, col[2]) ^ gmul(0x0e, col[3])]
 
-def shift_rows(s): # Dunno why this is shifting the COLS instead of the ROWS?
+def mix_columns(s, inv=False):
+  for c in range(Nb):
+    s[c] = mix_column(s[c]) if not inv else inv_mix_column(s[c])
+
+def shift_rows(s, inv=False): # Dunno why this is shifting the COLS instead of the ROWS?
   def shift_n_times(col, n):
     for _ in range(n):
-      head = col[:1]
-      col[:] = col[1:] + head
+      part = col[:1] if not inv else col[-1:]
+      col[:] = (col[1:] + part) if not inv else (part + col[:-1])
     return col
   o = array2d(4)
   for i in range(Nk):
@@ -108,17 +122,46 @@ def cipher(state, w):
   shift_rows(state)
   add_round_key(state, w[Nr*Nb:(Nr+1)*Nb])
 
+def inv_cipher(state, w):
+  add_round_key(state, w[Nr*Nb:(Nr+1)*Nb])
+  for r in range(Nr-1, 0, -1):
+    shift_rows(state, True)
+    sub_bytes(state, True)
+    add_round_key(state, w[r*Nb:(r+1)*Nb])
+    mix_columns(state, True)
+  shift_rows(state, True)
+  sub_bytes(state, True)
+  add_round_key(state, w[0:Nb])
+
 # TESTING ======================================================================
 
+def key_schedules(key_or_partial):
+  return [*map(word, key_expansion(array(16, key_or_partial)))]
+
 def encrypt(value, key):
+  if type(value) == str:
+    value = text_to_block(value)
   state = array2d(4, value)
-  result = cipher(state, [*map(word, key_expansion(array(16, key)))])
+  result = cipher(state, key_schedules(key))
+  return flatten(state)
+
+def decrypt(value, key):
+  state = array2d(4, value)
+  result = inv_cipher(state, key_schedules(key))
   return flatten(state)
 
 def text_to_block(txt):
   arr = list(txt.encode("utf8"))
   pad = (BLOCK_SIZE // 8) - len(arr) % (BLOCK_SIZE // 8)
   return arr + ([pad]*pad) # pkcs5 style padding
+
+def block_to_text(bs): # TODO: Needs to be more robust
+  p = bs[-1]
+  for i in range(len(bs)-1, 0, -1):
+    b = bs[i]
+    if b != p: break
+    bs[:] = bs[:-1]
+  return bytes(bs).decode("utf8")
 
 def parse_hex_arrays(arr2d):
   return [parse_hex_array(arr) for arr in arr2d]
@@ -208,8 +251,8 @@ if DEBUG:
         parse_hex_joined("69c4e0d86a7b0430d8cdb78070b4c55a") # output
       ),
       (
-        text_to_block("hello"),
-        list(b"xxxxxxxxxxxxxxxx"),
+        "hello",
+        list(b"x"*16),
         parse_hex_joined("AE5BF2DBE2A958E142216D6E275DE9D1"),
       )
   ]
@@ -218,6 +261,24 @@ if DEBUG:
     assert result == test[2], f"{test[2]} != {result}"
 
   print("cipher() works")
+
+  tests = [
+      (
+        parse_hex_joined("69c4e0d86a7b0430d8cdb78070b4c55a"),# input
+        parse_hex_joined("000102030405060708090a0b0c0d0e0f"),# key
+        parse_hex_joined("00112233445566778899aabbccddeeff") # output
+      ),
+      (
+        parse_hex_joined("AE5BF2DBE2A958E142216D6E275DE9D1"),
+        list(b"x"*16),
+        text_to_block("hello"),
+      )
+  ]
+  for test in tests:
+    result = decrypt(test[0], test[1])
+    assert result == test[2], f"{test[2]} != {result}"
+
+  print("inv_cipher() works")
 
 # Definitions:
 # Word: 32 bits or 4 bytes
