@@ -2,18 +2,18 @@
 BLOCK_SIZE, Nr, Nb, Nk = 128, 10, 4, 4
 def flatten(arr2d): return [el for arr in arr2d for el in arr]
 def chunks(arr, csize): return [arr[i:i+csize] for i in range(0, len(arr), csize)]
-def word(arr): return int.from_bytes(arr, "big") # [byte,byte,byte,byte] -> uint32
-def word_bytes(w): return list(int.to_bytes(w, 4, "big")) # uint32 -> [byte,byte,byte,byte]
+def uint32(arr): return int.from_bytes(arr, "big") # [byte,byte,byte,byte] -> uint32
+def uint32_bytes(ui32): return list(int.to_bytes(ui32, 4, "big")) # uint32 -> [byte,byte,byte,byte]
 def rotate_R32(ui32, bits): return ((ui32 >> bits) | (ui32 << (32 - bits))) & 0xff_ff_ff_ff
 def array(al, init=[]): return (init + ([0] * al))[:al]
 def array2d(ml, init=[]): return chunks(array(ml ** 2, init), ml)
 def sub_byte(box, byte): return box[byte >> 4][byte & 0xf]
-def sub_word(box, w): return word([sub_byte(box, byte) for byte in word_bytes(w)])
+def sub_word(box, ui32): return uint32([sub_byte(box, byte) for byte in uint32_bytes(ui32)])
 def add_round_key(state, wbs): update_state_el(state, lambda r, c: state[r][c] ^ wbs[r * Nk + c])
 def unzip_mtx(z, ml): return chunks([int("".join(c), 16) for c in chunks(z, 2)], ml)
 
 def mix_columns(state, inv=False):
-  for c in range(Nb): state[c] = mix_column(state[c], inv)
+  state[:] = [mix_column(state[r], inv) for r in range(Nk)]
 
 def update_state_el(state, fn):
   for r, c in [(i // Nk, i % Nb) for i in range(Nk * Nb)]:
@@ -46,19 +46,20 @@ def shift_rows(s, inv=False): # Dunno why this is shifting the COLS instead of t
   for i in range(Nk):
     s[0][i],s[1][i],s[2][i],s[3][i] = shift_n_times([s[0][i],s[1][i],s[2][i],s[3][i]], i)
 
-def key_expansion(key, ks = array(Nb * (Nr + 1))):
-  for i in range(len(ks)):
+def key_expansion(key):
+  ksb = array(Nb * (Nr + 1)) # uint32[n]
+  for i in range(len(ksb)):
     r = Nb * i
     if i < Nk:
-      ks[i] = word([key[r], key[r+1], key[r+2], key[r+3]])
+      ksb[i] = uint32([key[r], key[r+1], key[r+2], key[r+3]])
     else:
-      temp = ks[i - 1]
+      temp = ksb[i - 1]
       if not i % Nk:
         temp = sub_word(sbox, rotate_R32(temp, 24)) ^ rcon[i // Nk]
       elif Nk > 6 and i % Nk == 4:
         temp = sub_word(sbox, temp)
-      ks[i] = ks[i - Nk] ^ temp
-  return flatten([word_bytes(w) for w in ks])
+      ksb[i] = ksb[i - Nk] ^ temp
+  return flatten([uint32_bytes(ui32) for ui32 in ksb]) # -> byte[n * 4]
 
 def cipher(state, ks):
   add_round_key(state, ks[0:Nb*4])
@@ -73,7 +74,7 @@ def cipher(state, ks):
 
 def inv_cipher(state, ks):
   add_round_key(state, ks[Nr*Nb*4:(Nr+1)*Nb*4])
-  for r in range(Nr-1, 0, -1):
+  for r in range(Nr - 1, 0, -1):
     shift_rows(state, True)
     sub_bytes(state, True)
     add_round_key(state, ks[r*Nb*4:(r+1)*Nb*4])
