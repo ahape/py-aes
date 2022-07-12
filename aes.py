@@ -9,18 +9,18 @@ def array(al, init=[]): return (init + ([0] * al))[:al]
 def array2d(ml, init=[]): return chunks(array(ml ** 2, init), ml)
 def sub_byte(box, byte): return box[byte >> 4][byte & 0xf]
 def sub_word(box, ui32): return uint32([sub_byte(box, byte) for byte in uint32_bytes(ui32)])
-def add_round_key(state, wbs): update_state_el(state, lambda r, c: state[r][c] ^ wbs[r * Nk + c])
+def add_round_key(state, wbs): foreach_in_state(state, lambda r, c: state[r][c] ^ wbs[r * Nk + c])
 
 def mix_columns(state, inv=False):
   state[:] = [mix_column(state[r], inv) for r in range(Nk)]
 
-def update_state_el(state, fn):
+def foreach_in_state(state, fn):
   for r, c in [(i // Nk, i % Nb) for i in range(Nk * Nb)]:
     state[r][c] = fn(r, c)
 
 def sub_bytes(state, inv=False):
   box = sbox if not inv else inv_sbox
-  update_state_el(state, lambda r, c: sub_byte(box, state[r][c]))
+  foreach_in_state(state, lambda r, c: sub_byte(box, state[r][c]))
 
 def gmul(a, b, p=0):
   if a == 1: return b
