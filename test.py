@@ -1,7 +1,10 @@
 import aes
 
+def chunks(arr, csize): return [arr[i:i+csize] for i in range(0, len(arr), csize)]
+def flatten(arr2d): return [el for arr in arr2d for el in arr]
+def array(al, init=[]): return (init + ([0] * al))[:al]
 def rotate_L8(i8, s): return ((i8<<s) | (i8>>(8-s))) & 0xff
-def array2d(ml, init=[]): return aes.chunks(aes.array(ml ** 2, init), ml)
+def array2d(ml, init=[]): return chunks(array(ml ** 2, init), ml)
 # Programmatically build rcon
 Rcon2, p_rcon = [0], 1
 for _ in range(10):
@@ -28,20 +31,20 @@ for n in range(16*16):
 
 def key_schedules(key_or_partial):
   if type(key_or_partial[0]) == list:
-    key_or_partial = aes.flatten(key_or_partial)
-  return aes.key_expansion(aes.array(16, key_or_partial))
+    key_or_partial = flatten(key_or_partial)
+  return aes.key_expansion(array(16, key_or_partial))
 
 def encrypt(value, key):
   if type(value) == str:
     value = text_to_block(value)
   state = array2d(4, value)
   result = aes.cipher(state, key_schedules(key))
-  return aes.flatten(state)
+  return flatten(state)
 
 def decrypt(value, key):
   state = array2d(4, value)
   result = aes.inv_cipher(state, key_schedules(key))
-  return aes.flatten(state)
+  return flatten(state)
 
 def text_to_block(txt):
   arr = list(txt.encode("utf8"))
@@ -87,7 +90,7 @@ if DEBUG:
   assert [77, 126, 189, 248] == f, f
   print("mix_column() works")
 
-  expected = aes.flatten(parse_hex_arrays([
+  expected = flatten(parse_hex_arrays([
     "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
     "62 63 63 63 62 63 63 63 62 63 63 63 62 63 63 63",
     "9b 98 98 c9 f9 fb fb aa 9b 98 98 c9 f9 fb fb aa",
@@ -103,7 +106,7 @@ if DEBUG:
   actual = aes.key_expansion([0]*16)
   assert expected == actual, f"{expected} != {actual}"
 
-  expected = aes.flatten(parse_hex_arrays([
+  expected = flatten(parse_hex_arrays([
     "ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff",
     "e8 e9 e9 e9 17 16 16 16 e8 e9 e9 e9 17 16 16 16",
     "ad ae ae 19 ba b8 b8 0f 52 51 51 e6 45 47 47 f0",
@@ -119,7 +122,7 @@ if DEBUG:
   actual = aes.key_expansion([0xff]*16)
   assert expected == actual, f"{expected} != {actual}"
 
-  expected = aes.flatten(parse_hex_arrays([
+  expected = flatten(parse_hex_arrays([
     "00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f",
     "d6 aa 74 fd d2 af 72 fa da a6 78 f1 d6 ab 76 fe",
     "b6 92 cf 0b 64 3d bd f1 be 9b c5 00 68 30 b3 fe",
