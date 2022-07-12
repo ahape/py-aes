@@ -1,7 +1,7 @@
 import aes
 
 def rotate_L8(i8, s): return ((i8<<s) | (i8>>(8-s))) & 0xff
-
+def array2d(ml, init=[]): return aes.chunks(aes.array(ml ** 2, init), ml)
 # Programmatically build rcon
 Rcon2, p_rcon = [0], 1
 for _ in range(10):
@@ -9,7 +9,7 @@ for _ in range(10):
   p_rcon = (p_rcon<<1) ^ (0x11b & -(p_rcon>>7))
 
 # Programmatically build sbox
-sbox2, p, q = aes.array2d(16, [0x63]), 1, 1
+sbox2, p, q = array2d(16, [0x63]), 1, 1
 while True:
   p = (p ^ (p << 1) & 0xff) ^ (0x1b if p & 0x80 else 0)
   for s in [1, 2, 4]:
@@ -19,7 +19,7 @@ while True:
   if p == 1: break
 
 # Programmatically build inverse sbox
-inv_sbox2 = aes.array2d(16)
+inv_sbox2 = array2d(16)
 for n in range(16*16):
   v = sbox2[n >> 4][n & 0xf]
   v = ((((v >> 4) - 1) << 4) & 0xf0) | (((v & 0xf) - 1) & 0xf)
@@ -34,12 +34,12 @@ def key_schedules(key_or_partial):
 def encrypt(value, key):
   if type(value) == str:
     value = text_to_block(value)
-  state = aes.array2d(4, value)
+  state = array2d(4, value)
   result = aes.cipher(state, key_schedules(key))
   return aes.flatten(state)
 
 def decrypt(value, key):
-  state = aes.array2d(4, value)
+  state = array2d(4, value)
   result = aes.inv_cipher(state, key_schedules(key))
   return aes.flatten(state)
 
