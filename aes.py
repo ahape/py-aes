@@ -17,13 +17,10 @@ def sub_bytes(state, inv=False):
   box = sbox if not inv else isbox
   foreach_in_state(state, lambda r, c: sub_byte(box, state[r][c]))
 
-def gmul(a, b, p=0):
+def gmul(a, b, p=0, i=8):
   if a == 1: return b
-  for i in range(8):
-    p ^= a if b & 1 else 0
-    a = (a << 1) & 0xff ^ (0x1b if a & 0x80 else 0)
-    b >>= 1
-  return p & 0xff
+  if i == 0: return p & 0xff
+  return gmul((a<<1) ^ (0x1b if a & 0x80 else 0), b>>1, p^(a if b & 1 else 0), i-1)
 
 def mix_column(c, inv=False):
   m = mcs if not inv else imcs

@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import aes
 
 def chunks(arr, csize): return [arr[i:i+csize] for i in range(0, len(arr), csize)]
