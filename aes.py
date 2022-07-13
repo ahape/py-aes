@@ -22,12 +22,9 @@ def gmul(a, b, p=0, i=8):
   if i == 0: return p & 0xff
   return gmul((a<<1) ^ (0x1b if a & 0x80 else 0), b>>1, p^(a if b & 1 else 0), i-1)
 
-def mix_column(c, inv=False):
-  m = mcs if not inv else imcs
-  return [gmul(m[0x0], c[0]) ^ gmul(m[0x1], c[1]) ^ gmul(m[0x2], c[2]) ^ gmul(m[0x3], c[3]),
-          gmul(m[0x4], c[0]) ^ gmul(m[0x5], c[1]) ^ gmul(m[0x6], c[2]) ^ gmul(m[0x7], c[3]),
-          gmul(m[0x8], c[0]) ^ gmul(m[0x9], c[1]) ^ gmul(m[0xa], c[2]) ^ gmul(m[0xb], c[3]),
-          gmul(m[0xc], c[0]) ^ gmul(m[0xd], c[1]) ^ gmul(m[0xe], c[2]) ^ gmul(m[0xf], c[3])]
+def mix_column(col, inv=False):
+  a, b, c, d, m = col[0], col[1], col[2], col[3], mcs if not inv else imcs
+  return [gmul(m[i],a) ^ gmul(m[i+1],b) ^ gmul(m[i+2],c) ^ gmul(m[i+3],d) for i in range(0,16,4)]
 
 def shift_rows(state, inv=False):
   copy = [e[:] for e in state]
