@@ -9,7 +9,7 @@ from aes import Aes
 aes = Aes(128) # Can also be 192 or 256
 
 plaintext = b"this is 16 bytes"
-key = b"also is 16 bytes"
+key = b"also is 16 bytes" # Has to match block size (e.g. 128 bits)
 ciphertext = aes.cipher(plaintext, key)
 # then later on...
 plaintext = aes.inv_cipher(ciphertext, key)
