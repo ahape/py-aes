@@ -54,7 +54,9 @@ class Aes:
         ksb[i] = ksb[i - Nk] ^ temp
     return [byte for ui32 in ksb for byte in Aes.uint32_bytes(ui32)] # -> byte[n * 4]
 
-  def cipher(self, state, ks):
+  def cipher(self, state, key):
+    ks = self.key_expansion(list(key))
+    state = [[int(state[r*Aes.BS+c]) for c in Aes.bsr] for r in Aes.bsr] # Transform into byte matrix
     Nb, Nr, Nk = self.Nb, self.Nr, self.Nk
     Aes.add_round_key(state, ks[0:Nb*4])
     for r in range(1, Nr+1):
@@ -62,8 +64,11 @@ class Aes:
       Aes.shift_rows(state)
       if r < Nr: Aes.mix_columns(state) # (r < Nr) = Last iteration
       Aes.add_round_key(state, ks[r*Nb*4:(r+1)*Nb*4])
+    return bytes(state[i // Aes.BS][i % Aes.BS] for i in range(Aes.BS**2))
 
-  def inv_cipher(self, state, ks):
+  def inv_cipher(self, state, key):
+    ks = self.key_expansion(list(key))
+    state = [[int(state[r*Aes.BS+c]) for c in Aes.bsr] for r in Aes.bsr] # Transform into byte matrix
     Nb, Nr, Nk = self.Nb, self.Nr, self.Nk
     Aes.add_round_key(state, ks[Nr*Nb*4:(Nr+1)*Nb*4])
     for r in range(Nr-1, -1, -1):
@@ -71,3 +76,4 @@ class Aes:
       Aes.sub_bytes(state, True)
       Aes.add_round_key(state, ks[r*Nb*4:(r+1)*Nb*4])
       if r: Aes.mix_columns(state, True) # (r == 0) = Last iteration
+    return bytes(state[i // Aes.BS][i % Aes.BS] for i in range(Aes.BS**2))

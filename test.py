@@ -6,13 +6,18 @@ def flatten(arr2d): return [el for arr in arr2d for el in arr]
 def array(al, init=[]): return (init + ([0] * al))[:al]
 def rotate_L8(i8, s): return ((i8<<s) | (i8>>(8-s))) & 0xff
 def array2d(ml, init=[]): return chunks(array(ml ** 2, init), ml)
-# Programmatically build rcon
+def parse_hex_arrays(arr2d): return [parse_hex_array(arr) for arr in arr2d]
+def parse_hex_array(arr): return [int(h, 16) for h in arr.split()]
+def parse_hex_joined(joined): return [int(joined[i:i+2], 16) for i in range(0,len(joined),2)]
+def to_hex_string(arr): return "".join([f"{x:x}".zfill(2) for x in arr])
+
+# Programmatically build rcon for fun
 Rcon2, p_rcon = [0], 1
 for _ in range(10):
   Rcon2 += [p_rcon << (6*4)]
   p_rcon = (p_rcon<<1) ^ (0x11b & -(p_rcon>>7))
 
-# Programmatically build sbox
+# Programmatically build sbox for fun
 sbox2, p, q = array2d(16, [0x63]), 1, 1
 while True:
   p = (p ^ (p << 1) & 0xff) ^ (0x1b if p & 0x80 else 0)
@@ -22,7 +27,7 @@ while True:
   sbox2[p//16][p%16] = q ^ rotate_L8(q,1) ^ rotate_L8(q,2) ^ rotate_L8(q,3) ^ rotate_L8(q,4) ^ 0x63
   if p == 1: break
 
-# Programmatically build inverse sbox
+# Programmatically build inverse sbox for fun
 inv_sbox2 = array2d(16)
 for n in range(16*16):
   v = sbox2[n >> 4][n & 0xf]
@@ -34,47 +39,15 @@ class Crypto(Aes):
   def __init__(self, block_size):
     super().__init__(block_size)
 
-  def key_schedules(self, key_or_partial):
-    if type(key_or_partial[0]) == list:
-      key_or_partial = flatten(key_or_partial)
-    return self.key_expansion(array(self.Nb * self.Nk, key_or_partial))
-
   def encrypt(self, value, key):
-    if type(value) == str:
-      value = self.text_to_block(value)
-    state = array2d(4, value)
-    result = self.cipher(state, self.key_schedules(key))
-    return flatten(state)
+    value = parse_hex_joined(value)
+    key = parse_hex_joined(key)
+    return to_hex_string(self.cipher(value, key))
 
   def decrypt(self, value, key):
-    state = array2d(4, value)
-    result = self.inv_cipher(state, self.key_schedules(key))
-    return flatten(state)
-
-  def text_to_block(self, txt):
-    arr = list(txt.encode("utf8"))
-    pad = (self.BLOCK_SIZE // 8) - len(arr) % (self.BLOCK_SIZE // 8)
-    return arr + ([pad]*pad) # pkcs5 style padding
-
-def block_to_text(bs): # TODO: Needs to be more robust
-  p = bs[-1]
-  for i in range(len(bs)-1, 0, -1):
-    b = bs[i]
-    if b != p: break
-    bs[:] = bs[:-1]
-  return bytes(bs).decode("utf8")
-
-def parse_hex_arrays(arr2d):
-  return [parse_hex_array(arr) for arr in arr2d]
-
-def parse_hex_array(arr):
-  return [int(h, 16) for h in arr.split()]
-
-def parse_hex_joined(joined):
-  return [int(joined[i:i+2], 16) for i in range(0,len(joined),2)]
-
-def to_hex_string(arr):
-  return "".join([f"{x:x}".zfill(2) for x in arr])
+    value = parse_hex_joined(value)
+    key = parse_hex_joined(key)
+    return to_hex_string(self.inv_cipher(value, key))
 
 def test_gmul():
   assert Aes.gmul(0x57, 0x13) == 0xfe
@@ -146,112 +119,90 @@ def test_key_expansion():
   assert expected == actual, f"{expected} != {actual}"
   print("key_expansion() works")
 
+def run_test(result, expectation):
+    assert result == expectation, f"{expectation} != {result}"
 
 def test_128_encrypt():
   crypto = Crypto(128)
   tests = [
       ( # Example from https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197.pdf
-        parse_hex_joined("00112233445566778899aabbccddeeff"),# input
-        parse_hex_joined("000102030405060708090a0b0c0d0e0f"),# key
-        parse_hex_joined("69c4e0d86a7b0430d8cdb78070b4c55a") # output
+        "00112233445566778899aabbccddeeff",# input
+        "000102030405060708090a0b0c0d0e0f",# key
+        "69c4e0d86a7b0430d8cdb78070b4c55a" # output
       ),
-      (
-        "hello",
-        list(b"x"*16),
-        parse_hex_joined("AE5BF2DBE2A958E142216D6E275DE9D1"),
-      )
   ]
-  for test in tests:
-    result = crypto.encrypt(test[0], test[1])
-    assert result == test[2], f"{test[2]} != {result}"
-
+  for test in tests: 
+    run_test(crypto.encrypt(test[0], test[1]), test[2])
   print("cipher(128) works")
 
 def test_128_decrypt():
   crypto = Crypto(128)
   tests = [
       (
-        parse_hex_joined("69c4e0d86a7b0430d8cdb78070b4c55a"),# input
-        parse_hex_joined("000102030405060708090a0b0c0d0e0f"),# key
-        parse_hex_joined("00112233445566778899aabbccddeeff") # output
+        "69c4e0d86a7b0430d8cdb78070b4c55a",# input
+        "000102030405060708090a0b0c0d0e0f",# key
+        "00112233445566778899aabbccddeeff" # output
       ),
-      (
-        parse_hex_joined("AE5BF2DBE2A958E142216D6E275DE9D1"),
-        list(b"x"*16),
-        crypto.text_to_block("hello"),
-      )
   ]
   for test in tests:
-    result = crypto.decrypt(test[0], test[1])
-    assert result == test[2], f"{test[2]} != {result}"
-
+    run_test(crypto.decrypt(test[0], test[1]), test[2])
   print("inv_cipher(128) works")
 
 def test_192_encrypt():
   crypto = Crypto(192)
   tests = [
       (
-        parse_hex_joined("00112233445566778899aabbccddeeff"),# input
-        parse_hex_joined("000102030405060708090a0b0c0d0e0f1011121314151617"),# key
-        parse_hex_joined("dda97ca4864cdfe06eaf70a0ec0d7191") # output
+        "00112233445566778899aabbccddeeff",# input
+        "000102030405060708090a0b0c0d0e0f1011121314151617",# key
+        "dda97ca4864cdfe06eaf70a0ec0d7191" # output
       ),
   ]
   for test in tests:
-    result = crypto.encrypt(test[0], test[1])
-    assert result == test[2], f"{test[2]} != {result}"
-
+    run_test(crypto.encrypt(test[0], test[1]), test[2])
   print("cipher(192) works")
 
 def test_192_decrypt():
   crypto = Crypto(192)
   tests = [
       (
-        parse_hex_joined("dda97ca4864cdfe06eaf70a0ec0d7191"),# input
-        parse_hex_joined("000102030405060708090a0b0c0d0e0f1011121314151617"),# key
-        parse_hex_joined("00112233445566778899aabbccddeeff") # output
+        "dda97ca4864cdfe06eaf70a0ec0d7191",# input
+        "000102030405060708090a0b0c0d0e0f1011121314151617",# key
+        "00112233445566778899aabbccddeeff" # output
       ),
   ]
   for test in tests:
-    result = crypto.decrypt(test[0], test[1])
-    assert result == test[2], f"{test[2]} != {result}"
-
+    run_test(crypto.decrypt(test[0], test[1]), test[2])
   print("inv_cipher(192) works")
 
 def test_256_encrypt():
   crypto = Crypto(256)
   tests = [
       (
-        parse_hex_joined("00112233445566778899aabbccddeeff"),# input
-        parse_hex_joined("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),# key
-        parse_hex_joined("8ea2b7ca516745bfeafc49904b496089") # output
+        "00112233445566778899aabbccddeeff",# input
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",# key
+        "8ea2b7ca516745bfeafc49904b496089" # output
       ),
   ]
   for test in tests:
-    result = crypto.encrypt(test[0], test[1])
-    assert result == test[2], f"{test[2]} != {result}"
-
+    run_test(crypto.encrypt(test[0], test[1]), test[2])
   print("cipher(256) works")
 
 def test_256_decrypt():
   crypto = Crypto(256)
   tests = [
       (
-        parse_hex_joined("8ea2b7ca516745bfeafc49904b496089"),# input
-        parse_hex_joined("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),# key
-        parse_hex_joined("00112233445566778899aabbccddeeff") # output
+        "8ea2b7ca516745bfeafc49904b496089",# input
+        "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",# key
+        "00112233445566778899aabbccddeeff" # output
       ),
   ]
   for test in tests:
-    result = crypto.decrypt(test[0], test[1])
-    assert result == test[2], f"{test[2]} != {result}"
-
+    run_test(crypto.decrypt(test[0], test[1]), test[2])
   print("inv_cipher(256) works")
 
 import os
 
-DEBUG = os.getenv("DEBUG") == "true"
-
-if DEBUG:
+if os.getenv("DEBUG") == "true":
   test_gmul()
   test_mix_column()
   test_key_expansion()
@@ -260,7 +211,6 @@ if DEBUG:
   test_192_encrypt()
   test_192_decrypt()
   test_256_encrypt()
-
 
 # Definitions:
 # Word: 32 bits or 4 bytes
