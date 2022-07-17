@@ -69,6 +69,9 @@ def parse_hex_array(arr):
 def parse_hex_joined(joined):
   return [int(joined[i:i+2], 16) for i in range(0,32,2)]
 
+def to_hex_string(arr):
+  return "".join([f"{x:x}".zfill(2) for x in arr])
+
 import os
 
 DEBUG = os.getenv("DEBUG") == "true"
