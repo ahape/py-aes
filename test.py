@@ -37,7 +37,7 @@ class Crypto(Aes):
   def key_schedules(self, key_or_partial):
     if type(key_or_partial[0]) == list:
       key_or_partial = flatten(key_or_partial)
-    return self.key_expansion(array(16, key_or_partial))
+    return self.key_expansion(array(self.Nb * self.Nk, key_or_partial))
 
   def encrypt(self, value, key):
     if type(value) == str:
@@ -71,7 +71,7 @@ def parse_hex_array(arr):
   return [int(h, 16) for h in arr.split()]
 
 def parse_hex_joined(joined):
-  return [int(joined[i:i+2], 16) for i in range(0,32,2)]
+  return [int(joined[i:i+2], 16) for i in range(0,len(joined),2)]
 
 def to_hex_string(arr):
   return "".join([f"{x:x}".zfill(2) for x in arr])
@@ -187,6 +187,66 @@ def test_128_decrypt():
 
   print("inv_cipher(128) works")
 
+def test_192_encrypt():
+  crypto = Crypto(192)
+  tests = [
+      (
+        parse_hex_joined("00112233445566778899aabbccddeeff"),# input
+        parse_hex_joined("000102030405060708090a0b0c0d0e0f1011121314151617"),# key
+        parse_hex_joined("dda97ca4864cdfe06eaf70a0ec0d7191") # output
+      ),
+  ]
+  for test in tests:
+    result = crypto.encrypt(test[0], test[1])
+    assert result == test[2], f"{test[2]} != {result}"
+
+  print("cipher(192) works")
+
+def test_192_decrypt():
+  crypto = Crypto(192)
+  tests = [
+      (
+        parse_hex_joined("dda97ca4864cdfe06eaf70a0ec0d7191"),# input
+        parse_hex_joined("000102030405060708090a0b0c0d0e0f1011121314151617"),# key
+        parse_hex_joined("00112233445566778899aabbccddeeff") # output
+      ),
+  ]
+  for test in tests:
+    result = crypto.decrypt(test[0], test[1])
+    assert result == test[2], f"{test[2]} != {result}"
+
+  print("inv_cipher(192) works")
+
+def test_256_encrypt():
+  crypto = Crypto(256)
+  tests = [
+      (
+        parse_hex_joined("00112233445566778899aabbccddeeff"),# input
+        parse_hex_joined("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),# key
+        parse_hex_joined("8ea2b7ca516745bfeafc49904b496089") # output
+      ),
+  ]
+  for test in tests:
+    result = crypto.encrypt(test[0], test[1])
+    assert result == test[2], f"{test[2]} != {result}"
+
+  print("cipher(256) works")
+
+def test_256_decrypt():
+  crypto = Crypto(256)
+  tests = [
+      (
+        parse_hex_joined("8ea2b7ca516745bfeafc49904b496089"),# input
+        parse_hex_joined("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),# key
+        parse_hex_joined("00112233445566778899aabbccddeeff") # output
+      ),
+  ]
+  for test in tests:
+    result = crypto.decrypt(test[0], test[1])
+    assert result == test[2], f"{test[2]} != {result}"
+
+  print("inv_cipher(256) works")
+
 import os
 
 DEBUG = os.getenv("DEBUG") == "true"
@@ -197,6 +257,9 @@ if DEBUG:
   test_key_expansion()
   test_128_encrypt()
   test_128_decrypt()
+  test_192_encrypt()
+  test_192_decrypt()
+  test_256_encrypt()
 
 
 # Definitions:
