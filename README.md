@@ -8,7 +8,7 @@ Basically translating the pseudocode from [this paper](https://nvlpubs.nist.gov/
 from aes import Aes
 aes = Aes(128) # Can also be 192 or 256
 
-plaintext = b"this is 16 bytes"
+plaintext = b"this is 16 bytes" # Has to be 16 bytes. Haven't impl padding mech yet
 key = b"also is 16 bytes" # Has to match block size (e.g. 128 bits)
 ciphertext = aes.cipher(plaintext, key)
 # then later on...
